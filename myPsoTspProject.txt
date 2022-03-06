@@ -1,0 +1,291 @@
+#include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <math.h>
+
+typedef struct {
+    double x;
+    double y;
+} PositionX_Y;
+
+typedef struct {
+    PositionX_Y max;
+    PositionX_Y min;
+} Space;
+
+typedef struct {
+    Space search_space;
+    PositionX_Y actual_coord;
+} SpaceT;
+
+typedef struct {
+    PositionX_Y position;
+    PositionX_Y velocity;
+
+    PositionX_Y best_position;
+    double best_position_cost;
+} Particle;
+
+typedef struct {
+    int swarm_size;
+    int iterations;
+} parametersOfSwarm;
+
+PositionX_Y PSO(SpaceT *context, parametersOfSwarm swarm_params);
+
+int ary[10][10],completed[10],n,cost=0;
+int least(int c);
+void takeInput()
+{
+    int i,j;
+
+    printf("Enter the number of villages: ");
+    scanf("%d",&n);
+
+    printf("\nEnter the Cost Matrix\n");
+
+    for(i=0;i < n;i++)
+    {
+        printf("\nEnter Elements of Row: %d\n",i+1);
+
+        for( j=0;j < n;j++)
+            scanf("%d",&ary[i][j]);
+
+        completed[i]=0;
+    }
+
+    printf("\n\nThe cost list is:");
+
+    for( i=0;i < n;i++)
+    {
+        printf("\n");
+
+        for(j=0;j < n;j++)
+            printf("\t%d",ary[i][j]);
+    }
+}
+
+void mincost(int city)
+{
+    int i,ncity;
+
+    completed[city]=1;
+
+    printf("%d--->",city+1);
+    ncity=least(city);
+
+    if(ncity==999)
+    {
+        ncity=0;
+        printf("%d",ncity+1);
+        cost+=ary[city][ncity];
+
+        return;
+    }
+
+    mincost(ncity);
+}
+
+int least(int c)
+{
+    int i,nc=999;
+    int min=999,kmin;
+
+    for(i=0;i < n;i++)
+    {
+        if((ary[c][i]!=0)&&(completed[i]==0))
+            if(ary[c][i]+ary[i][c] < min)
+            {
+                min=ary[i][0]+ary[c][i];
+                kmin=ary[c][i];
+                nc=i;
+            }
+    }
+
+    if(min!=999)
+        cost+=kmin;
+
+    return nc;
+}
+
+int main()
+{
+    takeInput();
+
+
+    ////////
+    srand(time(NULL));
+
+    Space search_space = {
+            .min = { 0, 0 },
+            .max = { 999999, 999999 }
+    };
+
+    SpaceT context = {
+            .search_space = search_space,
+            .actual_coord = { 2500, 400}
+    };
+
+    parametersOfSwarm swarm_params = {
+            .swarm_size = 200,
+            .iterations = 10000
+    };
+
+    PositionX_Y best_position = PSO(&context, swarm_params);
+
+    printf("\nBest pos: (%.2f, %.2f)\n", best_position.x, best_position.y);
+    ///////
+    printf("\n\nThe Path is:\n");
+    mincost((int)best_position.x/best_position.x -1); //passing 0 because starting vertex
+
+    printf("\n\nMinimum cost is %d\n ",cost);
+    return 0;
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+double calculate_cost(PositionX_Y *coord, PositionX_Y *actual);
+
+
+
+/**
+ * Gets a random value between the lower and upper bounds
+ */
+int random_value(const int lower, const int upper) {
+    int random_val = rand() % (upper - lower);
+    return fabs(random_val) + lower;
+}
+
+/**
+ * Gets a dimension's reference based on the specified index
+ */
+double *get_coord(PositionX_Y *coord, const int index) {
+
+    if(index==0){
+        return &coord->x;
+    }else if(index==1){
+        return &coord->y;
+    }
+    return NULL;
+}
+
+/**
+ * Generates a random coordinate with each dimension initialized to a random value within the specified bounds
+ */
+PositionX_Y random_coord(Space *bounds) {
+    PositionX_Y coord;
+    for (int c = 0; c < sizeof(PositionX_Y) / sizeof(double); c++) {
+        *get_coord(&coord, c) = random_value( *get_coord(&bounds->min, c) , *get_coord(&bounds->max, c) );
+    }
+    return coord;
+}
+
+/**
+ * Sets the particles to random positions and velocities which are contained inside the search space
+ */
+void InitializeParticales(SpaceT *context, Particle particles[], const int size, PositionX_Y *best_position, double *best_position_cost) {
+    *best_position_cost = INFINITY;
+
+    for (int i = 0; i < size; i++) {
+        PositionX_Y position = random_coord(&context->search_space);
+        double cost = calculate_cost(&position, &context->actual_coord);
+
+        particles[i].position = position;
+        particles[i].velocity = random_coord(&context->search_space);
+        particles[i].best_position = position;
+        particles[i].best_position_cost = cost;
+
+        if (cost < *best_position_cost) {
+            *best_position = position;
+            *best_position_cost = cost;
+        }
+    }
+}
+
+/**
+ * Calculates the new velocity for a single dimension
+ */
+double calculate_velocity( double velocity, double position, double particle_best_position, double best_position) {
+    double random_p = random_value(0, 1000) / 100.0;
+    double random_g = random_value(0, 1000) / 100.0;
+
+    return  velocity + random_p * (particle_best_position - position) + random_g * (best_position - position);
+}
+
+/**
+ * Updates a particle's velocity and position for all dimensions
+ */
+void update_particle(Particle *particle, PositionX_Y *best_position) {
+    // Assuming each dimension is a double, we can loop through them by figuring out how many dimensions there are
+    for (int c = 0; c < sizeof(PositionX_Y) / sizeof(double); c++) {
+        double *particle_velocity = get_coord(&particle->velocity, c);
+        double *particle_position = get_coord(&particle->position, c);
+        double *particle_best_position = get_coord(&particle->best_position, c);
+        double *best_position_val = get_coord(best_position, c);
+
+        *particle_velocity = calculate_velocity(*particle_velocity, *particle_position, *particle_best_position, *best_position_val
+        );
+
+        // Do we need to keep the velocity and position within 2PI range?
+        if (c == 2) {
+            *particle_velocity = *particle_velocity / 3;
+        }
+        *particle_position += *particle_velocity;
+    }
+}
+
+/**
+ * Updates the entire particle swarm
+ */
+void update_swarm(SpaceT *context, Particle particles[], parametersOfSwarm *swarm_params, PositionX_Y *best_position, double *best_position_cost) {
+    int k = swarm_params->swarm_size;
+    Particle particle[k];
+    PositionX_Y position[k];
+    for (int p = 0; p < swarm_params->swarm_size; p++) {
+        particle[p] = particles[p];
+        position[p] = particle->position;
+
+        update_particle(particle, best_position);
+        double cost = calculate_cost(position, &context->actual_coord);
+
+        if (cost < particle->best_position_cost) {
+            particle->best_position = *position;
+            particle->best_position_cost = cost;
+
+            if (cost < *best_position_cost) {
+                *best_position = *position;
+                *best_position_cost = cost;
+            }
+        }
+    }
+}
+
+/**
+ * Runs particle swarm optimisation with the given swarm parameters
+ */
+PositionX_Y PSO(SpaceT *context, parametersOfSwarm swarm_params) {
+
+    Particle particles[swarm_params.swarm_size];
+    PositionX_Y best_position;
+    double best_position_cost;
+
+    InitializeParticales(context, particles, swarm_params.swarm_size, &best_position, &best_position_cost);
+
+    for (int i = 0; i < swarm_params.iterations; i++) {
+        update_swarm(context, particles, &swarm_params, &best_position, &best_position_cost);
+    }
+
+    return best_position;
+}
+
+/**
+ * Calculates the cost from the specified coordinate to the actual position
+ */
+double calculate_cost(PositionX_Y *coord, PositionX_Y *actual) {
+    return sqrt(
+            pow(fabs(actual->x - coord->x) / 1000.0, 2) +
+            pow(fabs(actual->y - coord->y) / 1000.0, 2)
+    );
+}
